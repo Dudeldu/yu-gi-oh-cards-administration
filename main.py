@@ -7,6 +7,7 @@ from flask import Flask
 import flask
 import webbrowser
 import logging
+from tqdm import tqdm
 
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
@@ -48,6 +49,7 @@ def dump_xml(file):
                                           "type": row[6], "price": str(row[7]), "desc": row[8]})
     ET.ElementTree(cards_tag).write(file)
     conn.close()
+    print("Database successfully exported to '" + str(file) + "'")
 
 
 def dump_csv(file):
@@ -63,6 +65,46 @@ def dump_csv(file):
     for row in rows:
         line = [row[0], row[2], row[3], row[4], row[6], str(row[7]), row[8]]
         output_file.write(",".join(line) + "\n")
+    conn.close()
+    print("Database successfully exported to '" + str(file) + "'")
+
+
+def update_price(query=None):
+    """
+    Updating the price of the cards specified by the sql-query from cardmarkets.com
+    !Attention!: Can take a while due to the long response time of cardmarket
+    :param query: SQL-Query for the cards or NONE to update all cards
+    """
+    conn = sqlite3.connect(db)
+    c = conn.cursor()
+    if query is None:
+        rows = c.execute("""SELECT * FROM Cards;""").fetchall()
+    else:
+        rows = c.execute(query).fetchall()
+    c = conn.cursor()
+    for row in tqdm(rows):
+        response = requests.get(row[3])
+        html = response.text
+        price = html.split("Preis-Trend</dt><dd class=\"col-6 col-xl-7\"><span>")[-1].split("<")[0]
+        price = float(price.split()[0].replace(",", "."))  # get the price trend
+        c.execute("""UPDATE Cards SET price=? WHERE url=?""", (price, row[3]))
+    conn.commit()
+    conn.close()
+
+
+def remove_cards(params):
+    name = params[0].lstrip().rsplit()[0]
+    collection = params[1].lstrip().rsplit()[0]
+    conn = sqlite3.connect(db)
+    c = conn.cursor()
+    rowid = c.execute("""SELECT rowid FROM Cards WHERE name=? AND collection=? limit 1""",
+                      (name, collection)).fetchone()
+    if rowid is None:
+        print("No card specified with name: " + name + " and collection: " + collection)
+    else:
+        c.execute("""DELETE FROM Cards WHERE rowid = ?;""", rowid)
+        print("Successful removed card: " + str(name))
+    conn.commit()
     conn.close()
 
 
@@ -110,6 +152,23 @@ def deliver_static_files(file):
     return flask.send_from_directory("dashboard", file)
 
 
+@app.route("/update")
+def handler_update():
+    update_price(flask.request.get("query"))
+    return flask.Response("Successful", status=200)
+
+
+@app.route("/remove")
+def handler_remove():
+    name = flask.request.get("name")
+    collection = flask.request.get("collection")
+    if name is None or collection is None:
+        return flask.Response("Bad request", status=400)
+    else:
+        remove_cards([name, collection])
+        return flask.Response("Successful", status=200)
+
+
 @app.route('/<query>')
 def query(query):
     if "favicon" in query:
@@ -125,13 +184,13 @@ def query(query):
         rows = c.execute(query_string).fetchall()
         response_xml = None
         try:
-            cards_tag = ET.Element("root")
+            cards_tag = ET.Element("root", {"query": query_string})
             for row in rows:
                 ET.SubElement(cards_tag, "card", {"name": row[0], "collection": row[2], "url": row[3], "img": row[4],
                                                   "type": row[6], "price": str(row[7]), "desc": row[8]})
             response_xml = ET.tostring(cards_tag, encoding="utf-8", method="xml").decode()
         except:
-            root_tag = ET.Element("root")
+            root_tag = ET.Element("root", {"query": query_string})
             for row in rows:
                 attrib = {}
                 for i, elem in enumerate(row):
@@ -145,7 +204,7 @@ def query(query):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("You have to specify a directory for the db")
+        print("You have to specify a directory for the db, start with 'python main.py <path to db>'")
     else:
         db = sys.argv[1]
         flask_thread = None
@@ -172,13 +231,22 @@ if __name__ == "__main__":
                 flask_thread = threading.Thread(target=app.run)
                 flask_thread.start()
                 webbrowser.open("http://127.0.0.1:5000/query")
+            elif cmd.startswith("!update"):
+                update_price(cmd.replace("!update", ""))
+            elif cmd.startswith("!remove"):
+                remove_cards(cmd.replace("!remove", "").split(","))
             elif cmd.startswith("!help"):
                 print("Possible commands:\n"
-                      " - !quit         close the program\n"
-                      " - !add          start the card adding loop\n"
-                      "     - !end          exists the card adding loop, that was accessed via !add\n"
-                      " - !dump csv     dumps the cards saved in the database to a csv-file\n"
-                      " - !dump xml     dumps the cards saved in the database to a xml-file\n"
-                      " - !webinterface starts the backend for the webinterface and opens browser\n", flush=True)
+                      " - !quit                 close the program\n"
+                      " - !add                  start the card adding loop\n"
+                      "     - !end                  exits the card adding loop, that was accessed via !add\n"
+                      " - !<link to card>       adds a card specified with the cardmarket-link to the card\n"
+                      " - !dump csv <dir>       dumps the cards saved in the database to a csv-file\n"
+                      " - !dump xml <dir>       dumps the cards saved in the database to a xml-file\n"
+                      " - !webinterface         starts the backend for the webinterface and opens browser\n"
+                      " - !update <sql-query>   updates the price from cardmarket\n"
+                      " - !remove <card name>,<collection name>\n"
+                      "                         removes the specified card ONCE", flush=True)
             else:
-                print("\a'" + cmd + "' isn't a known command\nEnter !help to get a list of possible commands", flush=True)
+                print("\a'" + cmd + "' isn't a known command\nEnter !help to get a list of possible commands",
+                      flush=True)
