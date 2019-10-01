@@ -112,3 +112,63 @@ body {
   text-overflow: ellipsis;
   text-decoration: underline;
 }
+
+form {
+    text-align: center;
+    border: solid black 2px;
+    width: 80%;
+    margin:auto;
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+.ok > .okIcon {
+    font-size: x-large;
+    color: green;
+    font-weight:1000;
+    margin-left: 5%;
+    display: block !important;
+}
+
+.cancel > .cancelIcon {
+    font-size: x-large;
+    color: red;
+    font-weight:1000;
+    margin-left: 5%;
+    display: block !important;
+}
+
+.pending > .pendingIcon{
+    margin-left: 5%;
+    display: block !important;
+}
+
+.okIcon {
+    display: none !important;
+}
+
+.cancelIcon {
+    display: none !important;
+}
+
+.pendingIcon {
+    display: none !important;
+}
+
+.dropdown-menu>li>a {
+    display: block;
+    padding: 3px 20px;
+    clear: both;
+    font-weight: 400;
+    line-height: 1.42857143;
+    color: #333;
+    white-space: nowrap;
+}
+
+.fa-trash-o:before {
+    content: "\f014";
+}
+
+.danger{
+    background-color: #f2dede;
+}

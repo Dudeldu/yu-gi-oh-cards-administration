@@ -1,29 +1,24 @@
 <?xml version="1.0"?>
 <xsl:stylesheet version="1.0" xmlns="http://www.w3.org/1999/xhtml" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-    <xsl:output method="xml"
+    <xsl:output method="xhtml"
                 doctype-public="-//W3C//DTD XHTML 1.1//EN"
                 doctype-system="http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"/>
     <xsl:template match="/root">
-        <html>
+        <html xmlns="http://www.w3.org/1999/xhtml">
             <head>
                 <title>Yu-Gi-Oh! Cards</title>
-                <style>
-                    form{
-                    text-align: center;
-                    border: solid black 2px;
-                    width: 80%;
-                    margin:auto;
-                    margin-top: 20px;
-                    margin-bottom: 20px;
-                    }
-                </style>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"/>
                 <link rel="stylesheet" type="text/css" href="dashboard/dashboard.css"/>
-                <script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.9.0/feather.min.js"/>
                 <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"/>
-                <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"/>
-                <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"/>
-                <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"/>
-                <script src="dashboard/dashboard.js"/>
+                <script src="https://code.jquery.com/jquery-3.4.1.min.js">
+                    // <![CDATA[ // ]]>
+                </script>
+                <script src="dashboard/dashboard.js">
+                    //Use this workaround described here: https://stackoverflow.com/questions/336670/explicit-script-end-tag-always-converted-to-self-closing
+                    //to make the server side xslt transformation working and prevent the script tag to not being closed
+                    // <![CDATA[ // ]]>
+                </script>
             </head>
             <body>
                 <nav class="navbar navbar-dark fixed-top bg-dark flex-md-nowrap p-0 shadow">
@@ -77,8 +72,54 @@
                                         </a>
                                     </li>
                                 </ul>
+                                <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                                    <span>Options</span>
+                                </h6>
+                                <ul class="nav flex-column mb-2">
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="#" onclick="$('#exampleModal').modal('toggle')">
+                                            <span data-feather="layers"/>
+                                            Add new cards
+                                        </a>
+                                    </li>
+                                </ul>
                             </div>
                         </nav>
+
+                        <div class="modal fade" id="exampleModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+                          <div class="modal-dialog" role="document">
+                            <div class="modal-content">
+                              <div class="modal-header">
+                                <h5 class="modal-title" id="exampleModalLabel">Add Cards</h5>
+                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                  <span aria-hidden="true">&#xD7;</span>
+                                </button>
+                              </div>
+                              <div class="modal-body addCardList">
+                                <div class="input-group mb-3 addCardListItem">
+                                    <div class="input-group-prepend">
+                                    <span class="input-group-text">CardID</span>
+                                    </div>
+                                    <input onchange="onCardEntered(this)" type="text" class="form-control"/>
+                                    <div class="none">
+                                        <div class="spinner-border pendingIcon" role="status">
+                                          <span class="sr-only">Loading...</span>
+                                        </div>
+                                        <div class="okIcon">
+                                            &#10003;
+                                        </div>
+                                        <div class="cancelIcon">
+                                            &#xD7;
+                                        </div>
+                                    </div>
+                                </div>
+                              </div>
+                              <div class="modal-footer">
+                                <button id="modalCloseBtn" type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
 
                         <main role="main" class="col-md-9 ml-sm-auto col-lg-10 px-4">
                             <h2 style="margin-top: 45px;"><span class="overflow-span" id="query" onclick="insertQueryToSearch()"><xsl:value-of select="@query"/></span></h2>
@@ -97,7 +138,7 @@
                                         </thead>
                                         <tbody>
                                             <xsl:for-each select="card">
-                                                <tr>
+                                                <tr class=".tableCardRow">
                                                     <td>
                                                         <xsl:value-of select="@name"/>
                                                     </td>
@@ -155,6 +196,12 @@
                         </main>
                     </div>
                 </div>
+                <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js">
+                    // <![CDATA[ // ]]>
+                </script>
+                <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js">
+                    // <![CDATA[ // ]]>
+                </script>
             </body>
         </html>
     </xsl:template>

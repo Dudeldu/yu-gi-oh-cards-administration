@@ -3,26 +3,14 @@
 ## Installation
 Install required packages with pip:  
 ```pip install -r requirements.txt```
-
 Download and install [sqlite](https://www.sqlite.org/index.html)  
-Create a sqlite database with the tables CARDS:
-```
-CREATE TABLE CARDS(
-name varchar(255),
-en_name varchar(255),
-collection varchar(255),
-url varchar(255),
-img varchar(255),
-id varchar(16),
-type varchar(64),
-price REAL,
-description TEXT
-);
-```
 
 ## Usage
-Start the python script and add the database as one parameter:
-```python main.py <path to db>```  
+Start the python script and add the database as one required parameter and 
+optional directly start the webinterface with the last parameter:  
+```python main.py <path to db> <start webinterface>```  
+Example:  
+```python main.py cards.db True ```  
 Look into ```!help``` for more information about possible commands  
 
 ## Lifecycle

@@ -8,6 +8,7 @@ import flask
 import webbrowser
 import logging
 from tqdm import tqdm
+import lxml.etree as ET
 
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
@@ -108,7 +109,7 @@ def remove_cards(params):
     conn.close()
 
 
-def eval_card_id(card_id=None, url=None):
+def eval_card_id(card_id=None, url=None, sound=False):
     try:
         if url is None:
             response = requests.get(
@@ -128,9 +129,12 @@ def eval_card_id(card_id=None, url=None):
             en_name = name
         json = requests.get("https://db.ygoprodeck.com/api/v5/cardinfo.php?name={}".format(en_name)).json()[0]
         write_card(name, collection, card_id, url, price, en_name, json)
+        return 0
     except:
         print("\nNOT FOUND " + str(card_id) + "\n", file=sys.stderr)
-        print("\a")
+        if sound:
+            print("\a")
+        return -1
 
 
 @app.route("/")
@@ -140,10 +144,10 @@ def base():
 
 @app.route("/shutdown")
 def shutdown():
-    func = flask.request.environ.get('werkzeug.server.shutdown')
-    if func is None:
+    shutdown_func = flask.request.environ.get('werkzeug.server.shutdown')
+    if shutdown_func is None:
         raise RuntimeError('Not running with the Werkzeug Server')
-    func()
+    shutdown_func()
     return "Shutting webservice down"
 
 
@@ -154,19 +158,29 @@ def deliver_static_files(file):
 
 @app.route("/update")
 def handler_update():
-    update_price(flask.request.get("query"))
-    return flask.Response("Successful", status=200)
+    update_price(flask.request.args.get("query"))
+    return flask.jsonify({"status": "successful"}), 200
 
 
-@app.route("/remove")
+@app.route("/card/add", methods=["POST"])
+def add_card():
+    card_id = flask.request.form.get("id")
+    if card_id is None:
+        return flask.jsonify({"error": "no card id provided"}), 400
+    if eval_card_id(card_id, url=None, sound=False) >= 0:
+        return flask.jsonify({"status": "added"}), 200
+    return flask.jsonify({"status": "error"}), 503
+
+
+@app.route("/remove", methods=["DELETE"])
 def handler_remove():
-    name = flask.request.get("name")
-    collection = flask.request.get("collection")
+    name = flask.request.form.get("name")
+    collection = flask.request.form.get("collection")
     if name is None or collection is None:
-        return flask.Response("Bad request", status=400)
+        return flask.jsonify({"status": "Bad request"}), 400
     else:
         remove_cards([name, collection])
-        return flask.Response("Successful", status=200)
+        return flask.jsonify({"status": "successful"}), 200
 
 
 @app.route('/<query>')
@@ -182,13 +196,11 @@ def query(query):
         if "select" not in query_string.lower():
             query_string = "SELECT * FROM Cards WHERE name LIKE '%" + query_string + "%'"
         rows = c.execute(query_string).fetchall()
-        response_xml = None
         try:
-            cards_tag = ET.Element("root", {"query": query_string})
+            root_tag = ET.Element("root", {"query": query_string})
             for row in rows:
-                ET.SubElement(cards_tag, "card", {"name": row[0], "collection": row[2], "url": row[3], "img": row[4],
-                                                  "type": row[6], "price": str(row[7]), "desc": row[8]})
-            response_xml = ET.tostring(cards_tag, encoding="utf-8", method="xml").decode()
+                ET.SubElement(root_tag, "card", {"name": row[0], "collection": row[2], "url": row[3], "img": row[4],
+                                                 "type": row[6], "price": str(row[7]), "desc": row[8]})
         except:
             root_tag = ET.Element("root", {"query": query_string})
             for row in rows:
@@ -196,21 +208,55 @@ def query(query):
                 for i, elem in enumerate(row):
                     attrib["elem" + str(i)] = str(elem)
                 ET.SubElement(root_tag, "element", attrib)
-                response_xml = ET.tostring(root_tag, encoding="utf-8", method="xml").decode()
+        '''
+        Use server side xslt transformation instead of client side,
+         - because this is the only way bootstrap.js works properly
+         - it generates browser independent html code
+        '''
         conn.close()
-        return flask.Response("<?xml-stylesheet href=\"dashboard/list_view.xsl\" type=\"text/xsl\" ?>" + response_xml,
-                              mimetype="text/xml")
+        xslt = ET.parse("dashboard/dashboard.xsl")
+        transformer = ET.XSLT(xslt, regexp=False)
+        return ET.tostring(transformer(root_tag))
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("You have to specify a directory for the db, start with 'python main.py <path to db>'")
+        print("You have to specify a directory for the db, start with 'python main.py <path to db> <start webinterface>"
+              "'\nParameter:\n"
+              "    - path to db (required) path to the database containing the cards\n"
+              "    - start webinterface (optional) directly start the webinterface [default=True]\n")
     else:
         db = sys.argv[1]
-        flask_thread = None
+        # Create table in the database for the first time
+        cur = sqlite3.connect(db).cursor()
+        try:
+            cur.execute("""SELECT * FROM Cards;""")
+            cur.close()
+        except sqlite3.OperationalError:
+            cur.execute("""CREATE TABLE CARDS(
+                            name varchar(255),
+                            en_name varchar(255),
+                            collection varchar(255),
+                            url varchar(255),
+                            img varchar(255),
+                            id varchar(16),
+                            type varchar(64),
+                            price REAL,
+                            description TEXT
+                            );""")
+            cur.close()
+        if len(sys.argv) == 2 or (len(sys.argv) == 3 and sys.argv[2] == "True"):
+            flask_thread = threading.Thread(target=app.run)
+            flask_thread.start()
+            webbrowser.open("http://127.0.0.1:5000/query")
+        elif sys.argv[2] == "False":
+            flask_thread = None
+        else:
+            raise Exception("Wrong value provided for start webinterface: " + str(sys.argv[2:]))
+
         while True:
             cmd = input(">> ")
-            if cmd.startswith("!quit"):
+            if cmd.startswith("!quit") or cmd.startswith("!exit"):
                 if flask_thread is not None:
                     requests.get("http://127.0.0.1:5000/shutdown")
                     flask_thread.join()
@@ -220,16 +266,18 @@ if __name__ == "__main__":
                     card_id = input("CARD ID: ")
                     if card_id.startswith("!end"):
                         break
-                    threading.Thread(target=eval_card_id, args=(card_id, None)).start()
+                    threading.Thread(target=eval_card_id, args=(card_id, None, True)).start()
             elif cmd.startswith("!dump csv"):
                 dump_csv(cmd.replace("!dump csv", ""))
             elif cmd.startswith("!dump xml"):
                 dump_xml(cmd.replace("!dump xml", ""))
+            # if command starts with http -> it is a cardmarket link
             elif cmd.startswith("!http"):
                 threading.Thread(target=eval_card_id, args=(None, cmd.replace("!", ""))).start()
             elif cmd.startswith("!webinterface"):
-                flask_thread = threading.Thread(target=app.run)
-                flask_thread.start()
+                if flask_thread is None:
+                    flask_thread = threading.Thread(target=app.run)
+                    flask_thread.start()
                 webbrowser.open("http://127.0.0.1:5000/query")
             elif cmd.startswith("!update"):
                 update_price(cmd.replace("!update", ""))
@@ -237,7 +285,7 @@ if __name__ == "__main__":
                 remove_cards(cmd.replace("!remove", "").split(","))
             elif cmd.startswith("!help"):
                 print("Possible commands:\n"
-                      " - !quit                 close the program\n"
+                      " - !quit / !exit         close the program\n"
                       " - !add                  start the card adding loop\n"
                       "     - !end                  exits the card adding loop, that was accessed via !add\n"
                       " - !<link to card>       adds a card specified with the cardmarket-link to the card\n"

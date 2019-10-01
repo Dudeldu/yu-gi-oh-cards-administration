@@ -1,3 +1,4 @@
+lxml==4.3.4
 requests==2.4.3
 flask==1.0.3
 tqdm==4.32.2
