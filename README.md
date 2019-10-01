@@ -1,4 +1,4 @@
-#YU-GI-OH Cards administration tool
+# YU-GI-OH Cards administration tool
 
 ## Installation
 Install required packages with pip:  
